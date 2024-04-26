@@ -1,0 +1,23 @@
+{% extends "base.html" %} {% block title %} Register System {% endblock %} {%
+block content %}
+
+<div class="container">
+  <div class="row">
+    <div class="col-lg-8 offset-lg-2">
+      <h2 class="mt-5">Welcome {{ email }}</h2>
+      <div class="mt-4">
+        <a class="btn btn-lg btn-primary mr-3" href="/capture">
+          Add Facial Data
+        </a>
+        <a class="btn btn-lg btn-secondary mr-3" href="/attendance/History">
+          Check Attendance Records
+        </a>
+        <a class="btn btn-lg btn-secondary" href="/imageData">
+          Check Facial Data
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %} {% block title %} User Images {% endblock %} {% block
+content %}
+<div class="container">
+  <h1 class="mt-5">User Images</h1>
+  <div class="row">
+    {% for image in user_images %}
+    <div class="col-md-3 mt-4">
+      <div class="card shadow rounded">
+        <img
+          class="card-img-top"
+          src="data:image/jpeg;base64,{{ image }}"
+          alt="User Image"
+        />
+        <div class="card-body">
+          <p class="card-text">Image {{ loop.index }}</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %} {% if user_images|length < 10 %} {% for i in range(10 -
+    user_images|length) %}
+    <div class="col-md-3 mt-4">
+      <div class="card">
+        <div class="card-body">
+          <p class="card-text text-muted">Empty</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %} {% endif %}
+  </div>
+  <div class="text-center mt-3">
+    <a href="/user" class="btn btn-secondary">Back To Home</a>
+  </div>
+</div>
+{% endblock %}

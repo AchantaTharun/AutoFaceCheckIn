@@ -1,0 +1,88 @@
+{% extends "base.html" %} {% block title %} Register System {% endblock %} {%
+block content %}
+
+<div class="container d-flex justify-content-center align-items-center vh-100">
+  {% if message %}
+  <div class="alert alert-secondary" role="alert">
+    <p>{{ message }}</p>
+  </div>
+  {% endif %}
+  <div class="shadow p-4 rounded">
+    <h1 class="text-center mb-4">Capture Page</h1>
+    <div class="d-flex justify-content-center mb-4">
+      <video id="video" width="640" height="480" autoplay></video>
+    </div>
+    <div class="d-flex justify-content-center">
+      <button id="stopButton" class="btn btn-danger mr-2">Stop Camera</button>
+      <button id="captureButton" class="btn btn-primary ml-2">
+        Capture Image
+      </button>
+    </div>
+    <div class="text-center mt-3">
+      <a href="/user" class="btn btn-secondary">Back To Home</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const video = document.getElementById("video");
+  let videoStream = null;
+
+  navigator.mediaDevices
+    .getUserMedia({ video: true })
+    .then((stream) => {
+      videoStream = stream;
+      video.srcObject = stream;
+    })
+    .catch((err) => {
+      console.error("Error accessing the camera:", err);
+    });
+
+  function stopCapture() {
+    if (videoStream) {
+      videoStream.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+      videoStream = null;
+    }
+  }
+
+  document.getElementById("stopButton").addEventListener("click", stopCapture);
+
+  document.getElementById("captureButton").addEventListener("click", () => {
+    const messages = document.querySelectorAll(".alert");
+    messages.forEach((message) => message.remove());
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob((blob) => {
+      const formData = new FormData();
+      formData.append("image", blob, "image.jpg");
+
+      fetch("/capture", {
+        method: "POST",
+        body: formData,
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          console.log(data);
+          if (data.success) {
+            const message = document.createElement("div");
+            message.classList.add("alert", "alert-success", "mt-3");
+            message.textContent = `${data.message}. Remaining images: ${data.remainingImages}`;
+            document.querySelector(".shadow").appendChild(message);
+          } else {
+            const errorMessage = document.createElement("div");
+            errorMessage.classList.add("alert", "alert-danger", "mt-3");
+            errorMessage.textContent = data.error;
+            document.querySelector(".shadow").appendChild(errorMessage);
+          }
+        })
+        .catch((error) => console.error("Error capturing image:", error));
+    }, "image/jpeg");
+  });
+</script>
+
+{% endblock %}
