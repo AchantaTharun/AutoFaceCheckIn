@@ -16,10 +16,19 @@
       type="text/css"
       href="{{ url_for('static', filename='css/register.css') }}"
     />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='css/pop-up.css') }}"
+    />
   </head>
   <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-      <a class="navbar-brand" href="#">AutoFaceCheckIn</a>
+      {% if session['role'] == "user" %}
+      <a class="navbar-brand" href="/user">AutoFaceCheckIn</a>
+      {% else %}
+      <a class="navbar-brand" href="/admin">AutoFaceCheckIn</a>
+      {% endif %}
       <button
         class="navbar-toggler"
         type="button"
@@ -33,12 +42,17 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
         <div class="navbar-nav">
+          {% if 'email' not in session %}
           <a class="nav-item nav-link active" href="/"
             >Register <span class="sr-only">(current)</span></a
           >
           <a class="nav-item nav-link" href="/login">Log In</a>
+          {% endif %} {% if session['role'] == "user" %}
+          <a class="nav-item nav-link" href="/user">Home</a>
+          {% else %}
+          <a class="nav-item nav-link" href="/admin">Home</a>
+          {% endif %}
           <a class="nav-item nav-link" href="/logout">Log Out</a>
-          <a class="nav-item nav-link disabled" href="#">Disabled</a>
         </div>
       </div>
     </nav>

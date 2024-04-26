@@ -20,4 +20,96 @@ block content %}
   </div>
 </div>
 
+<div id="myModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <p>
+      You have fewer than 10 images. Please add {{remaining_images}} more facial
+      images to continue.
+    </p>
+    <div class="d-flex justify-content-center mb-4">
+      <video id="video" width="640" height="480" autoplay></video>
+    </div>
+    <button id="captureButton" class="btn btn-primary ml-2">
+      Capture Image
+    </button>
+    <button id="stopButton" class="btn btn-danger mr-2">Stop Camera</button>
+    <a class="nav-item nav-link" href="/logout">Log Out</a>
+  </div>
+</div>
+
+<script>
+  if ({{ remaining_images }} > 0 ) {
+    var modal = document.getElementById("myModal");
+    modal.style.display = "block";
+
+    var closeBtn = document.getElementsByClassName("close")[0];
+    closeBtn.style.display = "none";
+
+    modal.onclick = function(event) {
+      event.stopPropagation();
+    }
+    const video = document.getElementById("video");
+  let videoStream = null;
+
+  navigator.mediaDevices
+    .getUserMedia({ video: true })
+    .then((stream) => {
+      videoStream = stream;
+      video.srcObject = stream;
+    })
+    .catch((err) => {
+      console.error("Error accessing the camera:", err);
+    });
+
+    function stopCapture() {
+    if (videoStream) {
+      videoStream.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+      videoStream = null;
+    }
+  }
+
+  document.getElementById("stopButton").addEventListener("click", stopCapture);
+
+    function captureImage() {
+    const messages = document.querySelectorAll(".alert");
+    messages.forEach((message) => message.remove());
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob((blob) => {
+      const formData = new FormData();
+      formData.append("image", blob, "image.jpg");
+
+      fetch("/capture", {
+        method: "POST",
+        body: formData,
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          console.log(data);
+          if (data.success) {
+            const message = document.createElement("div");
+            message.classList.add("alert", "alert-success", "mt-3");
+            message.textContent = `${data.message}. Remaining images: ${data.remainingImages}`;
+            document.querySelector(".shadow").appendChild(message);
+          } else {
+            const errorMessage = document.createElement("div");
+            errorMessage.classList.add("alert", "alert-danger", "mt-3");
+            errorMessage.textContent = data.error;
+            document.querySelector(".shadow").appendChild(errorMessage);
+          }
+        })
+        .catch((error) => console.error("Error capturing image:", error));
+    }, "image/jpeg");
+  }
+
+    document.getElementById("captureButton").addEventListener("click", captureImage);
+  }
+</script>
+
 {% endblock %}

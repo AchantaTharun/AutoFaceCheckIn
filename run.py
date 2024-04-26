@@ -6,7 +6,9 @@ import gridfs
 import codecs
 import os
 from io import BytesIO
-
+from model.detect_face import detect_face
+from model.train import process_image_and_save_embeddings
+from tempfile import NamedTemporaryFile
 
 
 app = Flask(__name__)
@@ -19,8 +21,9 @@ def MongoDB():
     records = db.users
     images = db.images
     grid_fs = gridfs.GridFS(db)
-    return records, images, grid_fs
-records, images, grid_fs = MongoDB()
+    schedule_c = db.schedule_c
+    return records, images, grid_fs, schedule_c
+records, images, grid_fs, schedule_c = MongoDB()
 
 
 
@@ -30,10 +33,10 @@ def index():
     if "email" in session:
         if session["role"] == "user":
             email = session["email"]
-            return render_template('user.html', email=email)
+            return redirect(url_for('user'))
         else:
             email = session["email"]
-            return render_template('admin.html', email=email)
+            return redirect(url_for('admin'))
     if request.method == "POST":
         user = request.form.get("fullname")
         email = request.form.get("email")
@@ -60,7 +63,7 @@ def index():
             session["email"] = new_email
             session["role"] = "user"
             session["username"] = user_data["name"]
-            return render_template('user.html', email=new_email)
+            return redirect(url_for('user'))
     return render_template('index.html')
 
 @app.route("/login", methods=["POST", "GET"])
@@ -68,11 +71,9 @@ def login():
     message = 'Please login to your account'
     if "email" in session:
         if session["role"] == "user":
-            email = session["email"]
-            return render_template('user.html', email=email)
+            return redirect(url_for('user'))
         else:
-            email = session["email"]
-            return render_template('admin.html', email=email)
+            return redirect(url_for('admin'))
 
     if request.method == "POST":
         email = request.form.get("email")
@@ -94,11 +95,9 @@ def login():
             else:
                 if "email" in session:
                     if session["role"] == "user":
-                        email = session["email"]
-                        return render_template('user.html', email=email)
+                        return redirect(url_for('user'))
                     else:
-                        email = session["email"]
-                        return render_template('admin.html', email=email)
+                       return redirect(url_for('admin'))
                 message = 'Wrong password'
                 return render_template('login.html', message=message)
         else:
@@ -111,7 +110,8 @@ def user():
     if "email" in session:
         if session["role"] == "user":
             email = session["email"]
-            return render_template('user.html', email=email)
+            image_count = images.count_documents({'email': email})
+            return render_template('user.html', email=email, remaining_images=10-image_count, image_count=image_count)
         else:
             return redirect(url_for('admin'))
     else:
@@ -150,6 +150,23 @@ def capture():
             return jsonify({'error': 'You have reached the maximum limit of 10 images'})
 
         imageFile = request.files['image']
+
+        with NamedTemporaryFile(delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            imageFile.save(temp_file_path)
+
+            faces = detect_face(temp_file_path)
+        
+        if not faces.any():
+            os.unlink(temp_file_path)
+            return jsonify({'error': 'No face detected in the image'})
+        elif len(faces) > 1:
+            os.unlink(temp_file_path)
+            return jsonify({'error': 'Multiple faces detected in the image'})
+
+        
+        process_image_and_save_embeddings(temp_file_path,  f"{user_name}_{user_images_count+1}")
+        
         folder_path = os.path.join("shots", user_name)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -182,6 +199,33 @@ def image_data():
    
     return render_template('image_data.html', user_images=imgs)
 
+class_schedule = {
+    'Monday': ['Class A', 'Class B', 'Class C'],
+    'Tuesday': ['Class D', 'Class E', 'Class F'],
+    'Wednesday': ['Class G', 'Class H', 'Class I'],
+    'Thursday': ['Class J', 'Class K', 'Class L'],
+    'Friday': ['Class M', 'Class N', 'Class O']
+}
+
+@app.route('/schedule', methods=['GET', 'POST'])
+def schedule():
+    if request.method == 'POST':
+        class_name = request.form['class_name']
+        week_day = request.form['week_day']
+        time_slot = request.form['time_slot']
+        
+        existing_class = schedule_c.find_one({'week_day': week_day, 'time_slot': time_slot})
+        if existing_class:
+            message = f"A class already exists on {week_day} at {time_slot}. Please choose a different time slot."
+        else:
+            schedule_c.insert_one({'class_name': class_name, 'week_day': week_day, 'time_slot': time_slot})
+            message = f"Class '{class_name}' added successfully!"
+        schedules = schedule_c.find()
+        return render_template('schedule.html', schedules=schedules, message=message)
+
+    schedules = list(schedule_c.find())
+
+    return render_template('schedule.html', schedules=schedules)
 
 if __name__ == "__main__":
   app.run(debug=True, host='0.0.0.0', port=3000)
