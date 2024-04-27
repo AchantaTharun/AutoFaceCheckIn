@@ -17,3 +17,4 @@ tensorflow==2.16.1
 pinecone-client==3.2.2
 facenet-pytorch==2.5.3
 torch==2.2.1
+Flask-SocketIO==5.3.6

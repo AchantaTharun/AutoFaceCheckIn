@@ -6,14 +6,19 @@ import gridfs
 import codecs
 import os
 from io import BytesIO
-from model.detect_face import detect_face
+from model.detect_face import detect_face, detect_face_from_stream
 from model.train import process_image_and_save_embeddings
 from tempfile import NamedTemporaryFile
-
+from model.face_recognition import generate_embeddings
+from flask_socketio import SocketIO, emit
+from database.pinecone import query_pinecone
+import json
+import threading
+from collections import Counter
 
 app = Flask(__name__)
 app.secret_key = "83a2e48c95f4d7a0e2e334572bd4b4c71cf68ae16c85f2d80d1c37f8c9d36c1e896ecae3d43a8b2eef9a302813fbf14c47a3b6a5f53b3e0c0d6244ff53b10d8f"
-
+socketio = SocketIO(app)
 
 def MongoDB():
     client = MongoClient("mongodb://127.0.0.1:27017/")
@@ -143,6 +148,7 @@ def capture():
 
     user_name = session["username"]
     user_images_count = images.count_documents({'email': session["email"]})
+    #user = records.find_one({'email': session["email"]})
     remaining_images = 10 - user_images_count
 
     if request.method == 'POST':
@@ -227,5 +233,31 @@ def schedule():
 
     return render_template('schedule.html', schedules=schedules)
 
+
+@app.route('/livefeed')
+def livefeed():
+    return render_template('livefeed.html')
+
+@socketio.on('stream_frame')
+def handle_stream_frame(data):
+    
+    frame = data["frame"]
+   
+    faces = detect_face_from_stream(frame)
+    #print(f"--------====== {faces}")
+    if faces.any():
+        embeddings = generate_embeddings(faces[0])
+        
+        results = query_pinecone(embeddings)
+        
+        names = [match['id'] for match in results['matches']]
+        names_only = [name.split("_")[0] for name in names]
+        name_counts = Counter(names_only)
+        most_common_name = name_counts.most_common(1)[0][0]
+        print('face_recognition_results', {'results': names})
+        emit('face_recognition_results', {'results': most_common_name})
+
+
+
 if __name__ == "__main__":
-  app.run(debug=True, host='0.0.0.0', port=3000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=3000)

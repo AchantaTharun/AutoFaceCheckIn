@@ -10,5 +10,6 @@ def process_image_and_save_embeddings(filename, username):
         embeddings = generate_embeddings(faces[0])
         embeddings_list = embeddings.tolist()
         print(f"========={embeddings_list[0]}")
+        save_to_pinecone([{"id": username, "values": embeddings_list[0]}])
     else:
         print("No faces detected in the image")

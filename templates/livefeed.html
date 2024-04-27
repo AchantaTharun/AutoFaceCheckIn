@@ -1,0 +1,171 @@
+{% extends "base.html" %} {% block title %} Register System {% endblock %} {%
+block content %}
+<h3 align="center">Face Detection Live Feed</h3>
+<div id="myDiv01">...</div>
+<br />
+<input type="button" value="Start" onclick="run()" />
+<input type="button" value="Stop" onclick="stop()" />
+<br /><br />
+<video
+  onplay="onPlay(this)"
+  id="inputVideo"
+  autoplay
+  muted
+  width="640"
+  height="480"
+  style="border: 1px solid #ddd"
+></video
+><br />
+<canvas
+  id="overlay"
+  width="640"
+  height="480"
+  style="position: relative; top: -487px; border: 1px solid #ddd"
+></canvas
+><br />
+<div id="resultsLog"></div>
+<script>
+  let stream;
+  let imagesSent = 0;
+  const socket = io();
+  let isNewPersonDetected = false;
+
+  async function resizeCanvasAndResults(dimensions, canvas, results) {
+    const { width, height } =
+      dimensions instanceof HTMLVideoElement
+        ? faceapi.getMediaDimensions(dimensions)
+        : dimensions;
+    canvas.width = width;
+    canvas.height = height;
+
+    return results.map((res) => res.forSize(width, height));
+  }
+
+  async function drawDetections(dimensions, canvas, detections) {
+    const resizedDetections = await resizeCanvasAndResults(
+      dimensions,
+      canvas,
+      detections
+    );
+    faceapi.drawDetection(canvas, resizedDetections);
+  }
+
+  async function drawLandmarks(dimensions, canvas, results, withBoxes = true) {
+    const resizedResults = await resizeCanvasAndResults(
+      dimensions,
+      canvas,
+      results
+    );
+    //console.log(resizedResults);
+    if (withBoxes) {
+      faceapi.drawDetection(
+        canvas,
+        resizedResults.map((det) => det.detection)
+      );
+    }
+    const faceLandmarks = resizedResults.map((det) => det.landmarks);
+    const drawLandmarksOptions = {
+      lineWidth: 2,
+      drawLines: true,
+      color: "green",
+    };
+    //faceapi.drawLandmarks(canvas, faceLandmarks, drawLandmarksOptions);
+  }
+
+  async function onPlay(videoEl) {
+    const options = new faceapi.TinyFaceDetectorOptions({
+      inputSize: 128,
+      scoreThreshold: 0.3,
+    });
+    const result = await faceapi
+      .detectSingleFace(videoEl, options)
+      .withFaceLandmarks(true);
+    if (result) {
+      //console.log(result._detection._score);
+
+      if (result._detection._score > 0.6 && imagesSent < 3) {
+        //let dupResult = result;
+        // dupResult._detection._score = "Face Detected";
+        drawLandmarks(
+          videoEl,
+          document.getElementById("overlay"),
+          [result],
+          true
+        );
+        captureAndSendImage(videoEl, result);
+      } else if (imagesSent >= 3 && result._detection._score == 0) {
+        imagesSent = 0;
+      } else {
+        imagesSent = 0;
+        let dupResult = result;
+        dupResult._detection._score = 0;
+        drawLandmarks(
+          videoEl,
+          document.getElementById("overlay"),
+          [dupResult],
+          true
+        );
+      }
+
+      document.getElementById("myDiv01").innerHTML =
+        "First of 68 face landmarks, x: " +
+        Math.round(result._unshiftedLandmarks._positions[0]._x) +
+        ", y: " +
+        Math.round(result._unshiftedLandmarks._positions[0]._y) +
+        "<br>";
+    } else {
+      imagesSent = 0;
+    }
+    setTimeout(() => onPlay(videoEl), 200);
+  }
+
+  async function captureAndSendImage(videoEl, result) {
+    if (imagesSent < 3) {
+      const canvas = document.createElement("canvas");
+      canvas.width = videoEl.width;
+      canvas.height = videoEl.height;
+      const context = canvas.getContext("2d");
+      context.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      const imageData = canvas.toDataURL("image/jpeg");
+
+      socket.emit("stream_frame", { frame: imageData });
+
+      imagesSent++;
+    }
+  }
+
+  async function run() {
+    await faceapi.loadTinyFaceDetectorModel(
+      "https://www.rocksetta.com/tensorflowjs/saved-models/face-api-js/"
+    );
+    await faceapi.loadFaceLandmarkTinyModel(
+      "https://www.rocksetta.com/tensorflowjs/saved-models/face-api-js/"
+    );
+    stream = await navigator.mediaDevices.getUserMedia({ video: {} });
+    const videoEl = document.getElementById("inputVideo");
+    videoEl.srcObject = stream;
+    onPlay(videoEl);
+  }
+
+  function stop() {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+  }
+  let receivedMessages = new Set();
+  //const socket = io();
+  socket.on("face_recognition_results", (data) => {
+    console.log("here");
+    const results = data.results;
+
+    if (!receivedMessages.has(results)) {
+      receivedMessages.add(results);
+      const logDiv = document.getElementById("resultsLog");
+      const logEntry = document.createElement("div");
+      logEntry.textContent = "Hello, " + results;
+      logDiv.appendChild(logEntry);
+    }
+  });
+</script>
+
+{% endblock %}
